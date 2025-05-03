@@ -1,318 +1,73 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/45oiw568eb0grkrk?svg=true)](https://ci.appveyor.com/project/PDS/witsml)
-[![Coverity Scan Build Status](https://scan.coverity.com/projects/18117/badge.svg)](https://scan.coverity.com/projects/pds-technology-witsml)
-
 ## WITSML
 
-**Quick Links:**&nbsp;
-[Blog](https://witsml.pds.technology/blog) |
-[Getting Started](https://witsml.pds.technology/docs/getting-started) |
-[Documentation](https://witsml.pds.technology/docs/documentation) |
-[Downloads](https://witsml.pds.technology/docs/downloads) |
-[Support](https://witsml.pds.technology/docs/support)
+This repository provides a functional WITSML server, originally developed by PDS and
+now restored with a proper documentation. It is now updated and maintained to support
+the community and industry with a reliable test WITSML server implementation.
 
-The “PDS.WITSMLstudio” solution provides reusable components referenced by all PDS WITSMLstudio applications containing the following projects: 
+### Setup Guide
 
-##### Framework
-Provides the composition container used to resolve dependencies.
+These setup steps have been tested on both Windows 10 and Windows 11. Follow these steps to set up and build the project:
 
-##### Framework.Web
-Configures the composition container to resolve dependencies for web projects and provides security.
+1. **Install Prerequisites**:
+    - Download **Visual Studio 2022** (tested with v17+) [here](https://visualstudio.microsoft.com/) and install.
+    - Add `msbuild` to your user's PATH environment variables:
+      ```sh
+      # Example path
+      C:\Program Files\Microsoft Visual Studio\2022\<VERSION>\Msbuild\Current\Bin
+      # For instance
+      C:\Program Files\Microsoft Visual Studio\2022\Community\Msbuild\Current\Bin
+      ```
+      ![environment-variable](img/environment-variable.png)
+    - Download **MongoDB** [here](https://www.mongodb.com/try/download/community) (tested with v8+), install and ensure it is running on port `27017`.
+    - Download **MongoDB Compass** [here](https://www.mongodb.com/try/download/compass) (tested with v1.46+), install and create a database named `WitsmlStore`.
+      ![mongodb-compass](img/mongo-db-compass.png)
+    - Download IIS **URL Rewrite** [here](https://www.iis.net/downloads/microsoft/url-rewrite) and install.
 
-##### Core
-Contains common classes related to WITSML that are referenced by other projects, including but not limited to the following:
+1. **Prepare Environment**:
+    - Type "Turn Windows features on or off" in Start and open.
+    - Turn on Internet Information Services (IIS).
 
-- ChannelDataReader - facilitates parsing and reading of log channel data
-````C#
-    /// <summary>
-    /// Gets multiple readers for each LogData from a <see cref="Witsml141.Log"/> instance.
-    /// </summary>
-    /// <param name="log">The log.</param>
-    /// <returns>An <see cref="IEnumerable{ChannelDataReader}"/>.</returns>
-    public static IEnumerable<ChannelDataReader> GetReaders(this Witsml141.Log log)
-    {
-        if (log?.LogData == null) yield break;
+      ![windows-feature-iis](img/windows-feature-iis.png)
+    - Turn on some Application Development Features.
 
-        _log.DebugFormat("Creating ChannelDataReaders for {0}", log.GetType().FullName);
+      ![windows-feature-application-development-features](img/windows-feature-application-development-features.png)
+    - Turn on HTTP Activation.
 
-        var isTimeIndex = log.IsTimeLog();
-        var increasing = log.IsIncreasing();
+      ![windows-feature-http-activation](img/windows-feature-http-activation.png)
 
-        foreach (var logData in log.LogData)
-        {
-            if (logData?.Data == null || !logData.Data.Any())
-                continue;
+2. **Build the Project**:
+    - Run Visual Studio as Administrator.
+    - Make sure to finish installing your project components.
+      ![visual-studio-install-components](img/visual-studio-install-components.png)
+    - Restore NuGet packages.
+      ![visual-studio-install-nuget-packages](img/visual-studio-install-nuget-packages.png)
+    - Select "Release" and run "Build > Rebuild Solution":
+      ![visual-studio-build-release](img/visual-studio-build-release.png)
 
-            var mnemonics = ChannelDataReader.Split(logData.MnemonicList);
-            var units = ChannelDataReader.Split(logData.UnitList);
-            var nullValues = log.GetNullValues(mnemonics).Skip(1).ToArray();
+3. **Configure IIS Server**:
+    - Open IIS Manager and Add Website by right-click on Sites.
+      ![iis-add-site](img/iis-add-site.png)
+    - Add any site name, set physical path to `<Project-Path>\src\Store` and set your desired port.
+      ![iis-add-site2](img/iis-add-site2.png)
+    - Add permissions to `<Project-Path>\src\Store` (by right-click on the folder) to IUSR.
+      ![iis-add-permission](img/iis-add-permission.png)
 
-            // Split index curve from other value curves
-            var indexCurve = log.LogCurveInfo.GetByMnemonic(log.IndexCurve) ?? new Witsml141.ComponentSchemas.LogCurveInfo
-            {
-                Mnemonic = new Witsml141.ComponentSchemas.ShortNameStruct(mnemonics.FirstOrDefault()),
-                Unit = units.FirstOrDefault()
-            };
+5. **Add a User**:
+    - Open PowerShell in the `.\src\Store.UserAdmin\bin` folder.
+    - Add a user with your desired credentials:
+      ```sh
+      .\PDS.WITSMLstudio.Store.UserAdmin.exe add -u <Your-Username> -p <Your-Password> -e <Your-Email>
+      ```
+      ![powershell-create-user](img/powershell-create-user.png)
 
-            // Skip index curve when passing mnemonics to reader
-            mnemonics = mnemonics.Skip(1).ToArray();
-            units = units.Skip(1).ToArray();
+6. **Connect to the Server**:
+    - Access the server at `http://localhost:<IIS-Site-Port>/api/soap` using:
+      - **Username**: `<Your-Username>`
+      - **Password**: `<Your-Password>`
+    - Use [PDS WITSMLstudio Desktop](https://witsml.pds.technology/studio/) if no client is available.
+      ![witsmlstudio-connection](img/witsmlstudio-connection.png)
 
-            yield return new ChannelDataReader(logData.Data, mnemonics.Length + 1, mnemonics, units, nullValues, log.GetUri(), dataDelimiter: log.GetDataDelimiterOrDefault())
-                // Add index curve to separate collection
-                .WithIndex(indexCurve.Mnemonic.Value, indexCurve.Unit, increasing, isTimeIndex);
-        }
-    }
-````
-- DataObjectNavigator - a framework for navigating a WITSML document
-````C#
-    /// <summary>
-    /// Navigates the element.
-    /// </summary>
-    /// <param name="element">The element.</param>
-    /// <param name="type">The type.</param>
-    /// <param name="parentPath">The parent path.</param>
-    protected void NavigateElement(XElement element, Type type, string parentPath = null)
-    {
-        if (IsIgnored(element.Name.LocalName)) return;
-
-        var properties = GetPropertyInfo(type);
-        var groupings = element.Elements().GroupBy(e => e.Name.LocalName);
-
-        foreach (var group in groupings)
-        {
-            if (IsIgnored(group.Key, GetPropertyPath(parentPath, group.Key))) continue;
-
-            var propertyInfo = GetPropertyInfoForAnElement(properties, group.Key);
-
-            if (propertyInfo != null)
-            {
-                NavigateElementGroup(propertyInfo, group, parentPath);
-            } 
-            else
-            {
-                HandleInvalidElementGroup(group.Key);
-            }
-        }
-
-        NavigateAttributes(element, parentPath, properties);
-    }
-````
-- DataObjectValidator - a framework for validating a WITSML document
-````C#
-    /// <summary>
-    /// Determines whether the specified object is valid.
-    /// </summary>
-    /// <param name="validationContext">The validation context.</param>
-    /// <returns>A collection that holds failed-validation information.</returns>
-    IEnumerable<ValidationResult> IValidatableObject.Validate(ValidationContext validationContext)
-    {
-        switch (Context.Function)
-        {
-            case Functions.GetFromStore:
-                foreach (var result in ValidateForGet())
-                    yield return result;
-                break;
-
-            case Functions.PutObject:
-            case Functions.AddToStore:
-                foreach (var result in ValidateProperties().Union(ValidateForInsert()))
-                    yield return result;
-                break;
-
-            case Functions.UpdateInStore:
-                foreach (var result in ValidateForUpdate())
-                    yield return result;
-                break;
-
-            case Functions.DeleteObject:
-            case Functions.DeleteFromStore:
-                foreach (var result in ValidateForDelete())
-                    yield return result;
-                break;
-        }
-    }
-````
-- WitsmlParser - static helper methods to parse WITSML XML strings
-````C#
-    /// <summary>
-    /// Parses the specified XML document using LINQ to XML.
-    /// </summary>
-    /// <param name="xml">The XML string.</param>
-    /// <param name="debug">if set to <c>true</c> includes debug log output.</param>
-    /// <returns>An <see cref="XDocument" /> instance.</returns>
-    /// <exception cref="WitsmlException"></exception>
-    public static XDocument Parse(string xml, bool debug = true)
-    {
-        if (debug)
-        {
-            _log.Debug("Parsing XML string.");
-        }
-
-        try
-        {
-            // remove invalid character along with leading/trailing white space
-            xml = xml?.Trim().Replace("\x00", string.Empty) ?? string.Empty;
-
-            return XDocument.Parse(xml);
-        }
-        catch (XmlException ex)
-        {
-            throw new WitsmlException(ErrorCodes.InputTemplateNonConforming, ex);
-        }
-    }
-````
-- Extensions – methods commonly used for WITSML classes
-````C#
-    /// <summary>
-    /// Converts the <see cref="Timestamp"/> to unix time microseconds.
-    /// </summary>
-    /// <param name="timestamp">The timestamp.</param>
-    /// <returns>The timestamp in unix time microseconds</returns>
-    public static long ToUnixTimeMicroseconds(this Timestamp timestamp)
-    {
-        return ((DateTimeOffset) timestamp).ToUnixTimeMicroseconds();
-    }
-````
-
-##### Store.Core
-Hosts WITSMLstudio Store service implementation, including service interfaces and high level data provider implementation, including:
-
-- WitsmlDataAdapter – encapsulates basic CRUD functionality for WITSML data objects
-````C#
-    /// <summary>
-    /// Data adapter that encapsulates CRUD functionality for <see cref="Well" />
-    /// </summary>
-    /// <seealso cref="PDS.WITSMLstudio.Store.Data.MongoDbDataAdapter{Well}" />
-    [Export(typeof(IWitsmlDataAdapter<Well>))]
-    [Export(typeof(IWitsml141Configuration))]
-    [PartCreationPolicy(CreationPolicy.Shared)]
-    public partial class Well141DataAdapter : MongoDbDataAdapter<Well>, IWitsml141Configuration
-    {
-        ...
-````
-- WitsmlDataProvider – implements support for WITSML API functions
-````C#
-    var context = WitsmlOperationContext.Current.Request = request.ToContext();
-    var version = string.Empty;
-    var dataProvider = Container.Resolve<IWitsmlDataProvider>(new ObjectName(context.ObjectType, version));
-    var result = dataProvider.GetFromStore(context);
-````
-- WitsmlQueryParser – handles parsing of WITSML input in a request
-````C#
-    var Parser = new WitsmlQueryParser(root, context.ObjectType, context.Options);
-    ...
-    var logDatas = Parser.Properties("logData").ToArray();
-    if (logDatas.Length > 1)
-    {
-        yield return new ValidationResult(ErrorCodes.RecurringLogData.ToString(), new[] { "LogData" });
-    }
-````
-- EtpDataProvider – implements support for ETP API functions
-````C#
-    /// <summary>
-    /// Initializes a new instance of the <see cref="EtpDataProvider{TObject}"/> class.
-    /// </summary>
-    /// <param name="container">The composition container.</param>
-    /// <param name="dataAdapter">The data adapter.</param>
-    protected EtpDataProvider(IContainer container, IWitsmlDataAdapter<TObject> dataAdapter) : base(container, dataAdapter)
-    {
-    }
-    ...
-    /// <summary>
-    /// Deletes a data object by the specified URI.
-    /// </summary>
-    /// <param name="uri">The data object URI.</param>
-    public virtual void Delete(EtpUri uri)
-    {
-        DataAdapter.Delete(uri);
-    }
-````
-- WitsmlExtensions – commonly used methods for WITSML classes
-````C#
-    /// <summary>
-    /// Adds support for the specified function and data object to the capServer instance.
-    /// </summary>
-    /// <param name="capServer">The capServer instance.</param>
-    /// <param name="function">The WITSML Store API function.</param>
-    /// <param name="dataObject">The data object.</param>
-    /// <param name="maxDataNodes">The maximum data nodes.</param>
-    /// <param name="maxDataPoints">The maximum data points.</param>
-    public static void Add(this Witsml141.CapServer capServer, Functions function, string dataObject, int maxDataNodes, int maxDataPoints)
-    {
-        Add(capServer, function, new Witsml141Schemas.ObjectWithConstraint(dataObject)
-        {
-            MaxDataNodes = maxDataNodes,
-            MaxDataPoints = maxDataPoints
-        });
-    }
-```` 
-
-##### Core.UnitTest
-Contains unit tests for PDS WITSMLstudio.
-
-##### Store.IntegrationTest
-Contains integration tests for PDS WITSMLstudio Store.
-
-##### Store.Web
-Implements configuration and security for WITSML and ETP endpoints.
-
-##### Store
-Configures and hosts PDS WITSMLstudio Store on IIS.
-
-##### Store.MongoDb
-Contains the WitsmlDataAdapter implementation for MongoDB.
-
-- MongoDbDataAdapter - is a data adapter that encapsulates CRUD functionality for WITSML objects.
-````C#
-    /// <summary>
-    /// Updates a data object in the data store.
-    /// </summary>
-    /// <param name="parser">The input template parser.</param>
-    /// <param name="dataObject">The data object to be updated.</param>
-    public override void Update(WitsmlQueryParser parser, T dataObject)
-    {
-        var uri = GetUri(dataObject);
-        using (var transaction = DatabaseProvider.BeginTransaction(uri))
-        {
-            UpdateEntity(parser, uri, transaction);
-            ValidateUpdatedEntity(Functions.UpdateInStore, uri);
-            transaction.Commit();
-        }
-    }
-````
-- MongoDbUtility - a utility class that encapsulates helper methods for parsing element in query and update
-````C#
-    /// <summary>
-    /// Gets the list of URI by object type.
-    /// </summary>
-    /// <param name="uris">The URI list.</param>
-    /// <param name="objectType">Type of the object.</param>
-    /// <returns>the list of URI specified by the object type.</returns>
-    public static List<EtpUri> GetObjectUris(IEnumerable<EtpUri> uris, string objectType)
-    {
-        return uris.Where(u => u.ObjectType == objectType).ToList();
-    }
-````
-- MongoTransaction - encapsulates transaction-like behavior for MongoDB
-````C#
-    /// <summary>
-    /// Commits the transaction in MongoDb.
-    /// </summary>
-    public void Commit()
-    {
-        var database = DatabaseProvider.GetDatabase();
-        foreach (var transaction in Transactions.Where(t => t.Status == TransactionStatus.Pending && t.Action == MongoDbAction.Delete))
-        {
-            Delete(database, transaction);
-        }
-
-        ClearTransactions();
-        Committed = true;
-    }
-````
-
-##### Store.MongoDb.IntegrationTest
-Integration tests for Store.MongoDb.
+By completing these steps, the project should be successfully set up and ready for use.
 
 ---
 ### Copyright and License
