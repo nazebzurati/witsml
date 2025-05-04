@@ -69,6 +69,41 @@ These setup steps have been tested on both Windows 10 and Windows 11. Follow the
 
 By completing these steps, the project should be successfully set up and ready for use.
 
+### Containerization Guide
+
+> **Note**: Ensure the project is built successfully before proceeding with containerization. MongoDB is not required if you want to containerize the project.
+
+If you want to containerize the server, follow these steps:
+
+1. **Enable Windows Features for Containers**:
+  - Open PowerShell as Administrator and run the following command to enable the required Windows features:
+    ```sh
+    Enable-WindowsOptionalFeature -Online -FeatureName $("Microsoft-Hyper-V", "Containers") -All
+    ```
+  - Restart your system if required.
+
+2. **Install and Configure Docker**:
+  - Download [Docker Desktop](https://www.docker.com/products/docker-desktop/) (tested on v4.41+) and install.
+  - Ensure Docker is running in **Windows Containers** mode. You can switch to Windows Containers by right-clicking the Docker icon in the system tray and selecting "Switch to Windows Containers."
+
+3. **Build and Run the Docker Container**:
+  - Open a terminal in this directory and run the following command to build and start the container:
+    ```sh
+    docker-compose up --build
+    ```
+  - Once the container is running, the server will be accessible at `http://localhost:8080`.
+
+4. **Add a User**:
+  - Open container PowerShell by running the following command:
+    ```sh
+    docker exec -it <Your-Container-Name> powershell
+    ```
+  - Add a user with your desired credentials:
+    ```sh
+    .\Store.UserAdmin\bin\PDS.WITSMLstudio.Store.UserAdmin.exe add -u <Your-Username> -p <Your-Password> -e <Your-Email>
+    ```
+    ![powershell-create-user](img/powershell-create-user.png)
+
 ---
 ### Copyright and License
 Copyright &copy; 2018 PDS Americas LLC
